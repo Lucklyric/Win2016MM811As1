@@ -9,11 +9,13 @@
 #include <string>
 #include <map>
 #include <ctime>
+#include <algorithm>
 using namespace std;
-//Define my own hasher
+
+/*Define my own hasher*/
 template < typename INTVECTOR > struct int_vector
 {
-	//Self-defined hash function for vector<int> type
+	/*Self-defined hash function for vector<int> type*/
 	std::size_t operator() ( const INTVECTOR& seq ) const{
 		std::size_t seed = 0;
 		for(auto& i : seq) {
@@ -23,24 +25,56 @@ template < typename INTVECTOR > struct int_vector
 	}
 };
 
-vector<vector<int>> DB; /*The global database*/
+/*Pre-defined variables*/
+typedef unordered_map<vector<int>,int,int_vector<vector<int>>> u_map_vector;
+//typedef map<vector<int>,int> u_map_vector;
 
-unordered_map <vector<int>,int,int_vector<vector<int>>> candidates;
-//map <vector<int>,int> candidates;
-bool inputdata(const  char* filename);/*Read data from file and initialize C1 candidates*/
+/*The global database*/
+vector<vector<int>> DB;
+unordered_map <int,u_map_vector> candidates_k;
+unordered_map <int,u_map_vector> large_itemsets_k;
+int num_transactions = 0;
+int currentLevel = 1;
+float min_support = 0.01;
 
+/*Declare functions*/
+
+/*Read data from file and initialize C1 candidates*/
+bool inputdata(const  char* filename);
+
+/*Generate large itemsets with given candidates*/
+u_map_vector generateLargeItemsets(u_map_vector &candidates);
+u_map_vector generateCandidates(u_map_vector &largeItemsets);
+void foreachDB(u_map_vector &candidates);
+
+void output(u_map_vector &map);
 
 int main(int argc, char const *argv[]){
-	//Start loading data;
+	clock_t begin = clock();
+	/*Start loading data and initialize C1 and L1*/
 	if (inputdata(argv[1])) {printf("Input file success!\n");}
-	printf("%d\n",(int)DB.size());
-	vector<int> a;a.push_back(77);
-	printf("%d\n",(int)candidates[a]);
+	while(true){
+		printf("Number of frequent %d_itemsets: %d\n",currentLevel,(int)large_itemsets_k[currentLevel].size());
+		currentLevel++;
+		u_map_vector candidates = generateCandidates(large_itemsets_k[currentLevel-1]);
+		foreachDB(candidates);
+		u_map_vector largeItemsets = generateLargeItemsets(candidates);
+		if (largeItemsets.size() == 0) {
+			printf("No any more large item-sets! at level %d\n",currentLevel);
+			break;
+		}
+		large_itemsets_k[currentLevel] = largeItemsets;
 
+	}
+	clock_t end = clock();
+	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+	printf("Total spend %f s\n",elapsed_secs);
+	return 0;
 }
 
 bool inputdata(const char* filename){
 	printf("Start loading data...\n");
+	u_map_vector candidates;
 	clock_t begin = clock();
 	ifstream inputFile;
 	inputFile.open(filename);
@@ -48,11 +82,12 @@ bool inputdata(const char* filename){
 		printf("Input file error");
 		return false;
 	}
-	string line;
+	string line ;
 	while(getline(inputFile,line)){
 		stringstream ss(line);
 		vector<int> tmpLine;
 		vector<int> itemsets;
+		num_transactions++;
 		int item;
 		while (ss >> item){
 			itemsets.clear();
@@ -60,8 +95,9 @@ bool inputdata(const char* filename){
 			tmpLine.push_back(item);
 			if (candidates.count(itemsets) > 0){
 				candidates[itemsets]++;
+
 			}else{
-				candidates[itemsets] = 0;
+				candidates[itemsets] = 1;
 			}
 		}
 		DB.push_back(tmpLine);
@@ -70,6 +106,88 @@ bool inputdata(const char* filename){
 	inputFile.close();
 	clock_t end = clock();
 	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+	candidates_k[1] = candidates;
+	large_itemsets_k[1] = generateLargeItemsets(candidates);
 	printf("Spend %f s\n",elapsed_secs);
 	return true;
+}
+
+u_map_vector generateLargeItemsets(u_map_vector &candidates){
+	u_map_vector largeItemsets;
+
+	for(u_map_vector::iterator itemset = candidates.begin();itemset!=candidates.end();++itemset){
+		if(itemset->second >= min_support*num_transactions ){
+			largeItemsets[itemset->first] = itemset->second;
+		}
+	}
+	return largeItemsets;
+}
+
+u_map_vector generateCandidates(u_map_vector &largeItemsets){
+	u_map_vector candidates;
+	for(u_map_vector::iterator itemsetA = largeItemsets.begin();itemsetA!=largeItemsets.end();++itemsetA){
+		for(u_map_vector::iterator itemsetB = itemsetA;itemsetB!=largeItemsets.end();++itemsetB){
+			if (itemsetA!=itemsetB){
+				bool flag = true;
+				for (int i = 0; i < currentLevel-2;i++){
+					if (itemsetA->first[i]!=itemsetB->first[i]){
+						flag = false;
+						break;
+					}
+				}
+				if (flag){
+					vector<int> candidate = itemsetA->first;
+					candidate.push_back(itemsetB->first.back());
+					sort(candidate.begin(),candidate.end());
+					candidates[candidate] = 0;
+					/*Prune*/
+					for (int j = 0;j<currentLevel;j++){
+						vector<int> tmpSubset;
+						for (int k = 0 ; k < currentLevel;k++){
+							if (j!=k){
+								tmpSubset.push_back(candidate[k]);
+							}
+						}
+						if (largeItemsets.find(tmpSubset) != largeItemsets.end()){
+							/*the sub-itemset in L-k-1 then it is the valid candidate*/
+							candidates[tmpSubset] = 0;
+						}
+					}
+				}
+			}
+		}
+	}
+	return candidates;
+}
+
+void foreachDB(u_map_vector &candidates){
+	vector<vector<int> >::iterator DB_begin = DB.begin();
+	vector<vector<int> >::iterator DB_end = DB.end();
+	int num = 0;
+	for(vector<vector<int> >::iterator transaction = DB_begin;transaction!=DB_end;++transaction){
+		u_map_vector::iterator candidates_end = candidates.end();
+		vector<int>::iterator transaction_end = (*transaction).end();
+		for(u_map_vector::iterator itemset = candidates.begin();itemset!=candidates_end;++itemset){
+			int matchItem = 0;
+			if (itemset->first.size() <= (*transaction).size()){
+				vector<int> tmp = itemset->first;
+				vector<int>::iterator itemset_end = tmp.end();
+				for (vector<int>::iterator item = tmp.begin();item!= itemset_end;++item){
+					for (vector<int>::iterator tran_item = (*transaction).begin();tran_item!= transaction_end;++tran_item){
+						if (*item == *tran_item) {matchItem++;break;}
+					}
+				}
+			}
+			if (matchItem == itemset->first.size()){
+				candidates[itemset->first]++;
+			}
+		}
+	}
+	printf("EndScan\n");
+}
+
+void output(u_map_vector &map){
+	for(u_map_vector::iterator itemset = map.begin();itemset!=map.end();++itemset){
+			printf("Candidates:%d,%d\n",(int)itemset->first[0],itemset->second);
+		}
 }
