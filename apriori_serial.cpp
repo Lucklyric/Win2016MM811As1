@@ -193,16 +193,26 @@ void foreachDB(u_map_vector &candidates){
 		for(int i = 0 ; i < num_transactions;i++){
 			u_map_vector::iterator candidates_end = candidates.end();
 			for(u_map_vector::iterator itemset = candidates.begin();itemset!=candidates_end;++itemset){
-				int matchItem = 0;
-				if (itemset->first.size() <= DB[i].size()){
+//				int matchItem = 0;
+//				bool largeFlag = true;
+//				if (itemset->first.size() <= DB[i].size()){
+//					for (int k=0 ;k< itemset->first.size();++k){
+//						bool flag = false;
+//						for (int m = 0; m< DB[i].size();++m){
+//							if (itemset->first[k] == DB[i][m]) {matchItem++;flag = true;break;}
+//						}
+//						if (!flag) {largeFlag = false;break;}
+//					}
+//
+//				}
+//				if (largeFlag){
+//					candidates[itemset->first]++;
+//				}
+				vector<int> temset = itemset->first;
+				vector<int>::iterator itemset_end =temset.end();
+				vector<int>::iterator trans_end = DB[i].end();
 
-					for (int k=0 ;k< itemset->first.size();++k){
-						for (int m = 0; m< DB[i].size();++m){
-							if (itemset->first[k] == DB[i][m]) {matchItem++;break;}
-						}
-					}
-				}
-				if (matchItem == itemset->first.size()){
+				if (std::includes(DB[i].begin(),trans_end,temset.begin(),itemset_end)){
 					candidates[itemset->first]++;
 				}
 			}
