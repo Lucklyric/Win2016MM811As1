@@ -30,12 +30,11 @@ template < typename INTVECTOR > struct int_vector
  */
 int num_transactions = 0;
 int currentLevel = 1;
-float min_support = 1/4.0f;
+float min_support = 10/10000.0f;
 vector<vector<int>> DB; 										//database
 typedef unordered_map<vector<int>,int,int_vector<vector<int>>> u_map_vector;
 unordered_map <int,u_map_vector> candidates_k;
 unordered_map <int,u_map_vector> large_itemsets_k;
-
 
 /**
  * Declare all functions
