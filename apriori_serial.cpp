@@ -25,30 +25,31 @@ template < typename INTVECTOR > struct int_vector
 	}
 };
 
-/*Pre-defined variables*/
-typedef unordered_map<vector<int>,int,int_vector<vector<int>>> u_map_vector;
-//typedef map<vector<int>,int> u_map_vector;
-
-/*The global database*/
-vector<vector<int>> DB;
-unordered_map <int,u_map_vector> candidates_k;
-unordered_map <int,u_map_vector> large_itemsets_k;
+/**
+ * Define variables
+ */
 int num_transactions = 0;
 int currentLevel = 1;
 float min_support = 0.001;
+vector<vector<int>> DB; 										//database
+typedef unordered_map<vector<int>,int,int_vector<vector<int>>> u_map_vector;
+unordered_map <int,u_map_vector> candidates_k;
+unordered_map <int,u_map_vector> large_itemsets_k;
 
-/*Declare functions*/
 
-/*Read data from file and initialize C1 candidates*/
-bool inputdata(const  char* filename);
-
-/*Generate large itemsets with given candidates*/
-u_map_vector generateLargeItemsets(u_map_vector &candidates);
+/**
+ * Declare all functions
+ */
+u_map_vector generateLargeItemsets(u_map_vector &candidates); 	//Generate large itemsets with given candidates
 u_map_vector generateCandidates(u_map_vector &largeItemsets);
+bool inputdata(const  char* filename); 							//Read data from file and initialize C1 candidates
 void foreachDB(u_map_vector &candidates);
-
+void nestCheckSubset(vector<int> &transaction,int level,vector<int>&pre,int idx);
 void output(u_map_vector &map);
 
+/**
+ * Main application
+ */
 int main(int argc, char const *argv[]){
 	clock_t begin = clock();
 	/*Start loading data and initialize C1 and L1*/
@@ -57,10 +58,10 @@ int main(int argc, char const *argv[]){
 		printf("Number of frequent %d_itemsets: %d\n",currentLevel,(int)large_itemsets_k[currentLevel].size());
 		currentLevel++;
 		u_map_vector candidates = generateCandidates(large_itemsets_k[currentLevel-1]);
+		candidates_k[currentLevel] = candidates;
 		printf("Number of candidates:%d\n",(int)candidates.size());
-		foreachDB(candidates);
-
-		u_map_vector largeItemsets = generateLargeItemsets(candidates);
+		foreachDB(candidates_k[currentLevel]);
+		u_map_vector largeItemsets = generateLargeItemsets(candidates_k[currentLevel]);
 		printf("Number of largeItemsets:%d\n",(int)largeItemsets.size());
 
 		if (largeItemsets.size() == 0) {
@@ -68,11 +69,11 @@ int main(int argc, char const *argv[]){
 			break;
 		}
 		large_itemsets_k[currentLevel] = largeItemsets;
-
 	}
 	clock_t end = clock();
 	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
 	printf("Total spend %f s\n",elapsed_secs);
+
 	return 0;
 }
 
@@ -145,7 +146,7 @@ u_map_vector generateCandidates(u_map_vector &largeItemsets){
 					candidate.push_back(itemsetB->first.back());
 					sort(candidate.begin(),candidate.end());
 					//candidates[candidate] = 0;
-					/*Prune*/
+					//Prune
 					for (int j = 0;j<currentLevel;j++){
 						vector<int> tmpSubset;
 						for (int k = 0 ; k < currentLevel;k++){
@@ -154,7 +155,7 @@ u_map_vector generateCandidates(u_map_vector &largeItemsets){
 							}
 						}
 						if (largeItemsets.find(tmpSubset) != largeItemsets_end){
-							/*the sub-itemset in L-k-1 then it is the valid candidate*/
+							//the sub-itemset in L-k-1 then it is the valid candidate
 							candidates[candidate] = 0;
 						}
 					}
@@ -188,38 +189,39 @@ void foreachDB(u_map_vector &candidates){
 //			}
 //		}
 //	}
-
 		int num = 0;
 		for(int i = 0 ; i < num_transactions;i++){
 			u_map_vector::iterator candidates_end = candidates.end();
-			for(u_map_vector::iterator itemset = candidates.begin();itemset!=candidates_end;++itemset){
-//				int matchItem = 0;
-//				bool largeFlag = true;
-//				if (itemset->first.size() <= DB[i].size()){
-//					for (int k=0 ;k< itemset->first.size();++k){
-//						bool flag = false;
-//						for (int m = 0; m< DB[i].size();++m){
-//							if (itemset->first[k] == DB[i][m]) {matchItem++;flag = true;break;}
-//						}
-//						if (!flag) {largeFlag = false;break;}
-//					}
-//
-//				}
-//				if (largeFlag){
-//					candidates[itemset->first]++;
-//				}
-				vector<int> temset = itemset->first;
-				vector<int>::iterator itemset_end =temset.end();
-				vector<int>::iterator trans_end = DB[i].end();
-
-				if (std::includes(DB[i].begin(),trans_end,temset.begin(),itemset_end)){
-					candidates[itemset->first]++;
-				}
+			vector<int> transaction = DB[i];
+			if (transaction.size()<currentLevel) continue;
+			for (int j = 0 ; j <  transaction.size()-currentLevel+1;j++){
+				vector<int> tmp;tmp.push_back(DB[i][j]);
+				nestCheckSubset(transaction,1,tmp,j);
 			}
 		}
 	printf("EndScan\n");
 }
 
+
+void nestCheckSubset(vector<int> &transaction,int level,vector<int>&pre,int idx){
+	if (level < currentLevel){
+		if (large_itemsets_k[currentLevel-1].find(pre) == large_itemsets_k[currentLevel-1].end()) return;
+			for (int j = idx+1;j<transaction.size()-currentLevel+level+1;j++){
+				vector<int> tmp = pre;
+				tmp.push_back(transaction[j]);
+				nestCheckSubset(transaction,level+1,tmp,j);
+			}
+	}else{
+
+		if(candidates_k[currentLevel].find(pre)!=candidates_k[currentLevel].end()){
+			candidates_k[currentLevel][pre]++;
+		}
+	}
+}
+
+/**
+ * Util functions for testing
+ */
 void output(u_map_vector &map){
 	for(u_map_vector::iterator itemset = map.begin();itemset!=map.end();++itemset){
 		printf("Candidates:");
