@@ -122,7 +122,7 @@ bool inputdata(const char* filename){
 }
 
 u_map_vector generateLargeItemsets(u_map_vector &candidates){
-	printf("Start generating largeItemsets...\n");
+	printf("Start generating (%d)largeItemsets...\n",currentLevel);
 	int tresh = min_support*num_transactions;
 	u_map_vector largeItemsets;
 
@@ -131,13 +131,13 @@ u_map_vector generateLargeItemsets(u_map_vector &candidates){
 			largeItemsets[itemset->first] = itemset->second;
 		}
 	}
-	printf("End generating largeItemsets!\n");
+	printf("End generating (%d)largeItemsets!\n",currentLevel);
 
 	return largeItemsets;
 }
 
 u_map_vector generateCandidates(u_map_vector &largeItemsets){
-	printf("Start generating candidates...\n");
+	printf("Start generating (k=%d) candidates...\n",currentLevel);
 	u_map_vector candidates;
 	u_map_vector::iterator largeItemsets_end;
 	for(u_map_vector::iterator itemsetA = largeItemsets.begin();itemsetA!=largeItemsets_end;++itemsetA){
@@ -157,10 +157,17 @@ u_map_vector generateCandidates(u_map_vector &largeItemsets){
 						int buffer = candidate[currentLevel-2];
 						candidate[currentLevel-2]= candidate[currentLevel-1];
 						candidate[currentLevel-1] = buffer;
+
+					}
+					if (currentLevel > 2){
+						vector<int> two_tmp; two_tmp.push_back(candidate[currentLevel-2]);two_tmp.push_back(candidate[currentLevel-1]);
+						if (large_itemsets_k[2].find(two_tmp)!=large_itemsets_k[2].end()) {candidates[candidate] = 0;}
+					}else{
+						candidates[candidate] = 0;
 					}
 					//sort(candidate.begin(),candidate.end());
-					candidates[candidate] = 0;
-					//Prune
+//					candidates[candidate] = 0;
+//					Prune
 //					for (int j = 0;j<currentLevel;j++){
 //						vector<int> tmpSubset;
 //						for (int k = 0 ; k < currentLevel;k++){
@@ -177,7 +184,7 @@ u_map_vector generateCandidates(u_map_vector &largeItemsets){
 			}
 		}
 	}
-	printf("End generating candidates!\n");
+	printf("End generating (k=%d) - (%d)candidates!\n",currentLevel,(int)candidates.size());
 	return candidates;
 }
 
