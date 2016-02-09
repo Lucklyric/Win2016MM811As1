@@ -56,14 +56,14 @@ int main(int argc, char const *argv[]){
 	while(true){
 		printf("Number of frequent %d_itemsets: %d\n",currentLevel,(int)large_itemsets_k[currentLevel].size());
 		currentLevel++;
-		u_map_vector candidates = generateCandidates(large_itemsets_k[currentLevel-1]);
-		if (candidates.size() == 0) {
-			printf("No any more candidates item-sets! at level %d\n",currentLevel);
-			break;
-		}
+		u_map_vector candidates;// = generateCandidates(large_itemsets_k[currentLevel-1]);
 		candidates_k[currentLevel] = candidates;
-		printf("Number of candidates:%d\n",(int)candidates.size());
 		foreachDB(candidates_k[currentLevel]);
+		printf("Number of candidates:%d\n",(int)candidates_k[currentLevel].size());
+		if (candidates_k[currentLevel].size() == 0) {
+					printf("No any more candidates item-sets! at level %d\n",currentLevel);
+					break;
+				}
 		//output(candidates_k[currentLevel]);
 		u_map_vector largeItemsets = generateLargeItemsets(candidates_k[currentLevel]);
 		printf("Number of largeItemsets:%d\n",(int)largeItemsets.size());
@@ -214,13 +214,12 @@ void foreachDB(u_map_vector &candidates){
 	printf("Start scaning database...\n");
 		int num = 0;
 		for(int i = 0 ; i < num_transactions;i++){
-			u_map_vector::iterator candidates_end = candidates.end();
+			//u_map_vector::iterator candidates_end = candidates.end();
 			vector<int> transaction = DB[i];
 			if (transaction.size()<currentLevel) continue;
 			for (int j = 0 ; j <  transaction.size()-currentLevel+1;j++){
 				vector<int> tmp;tmp.push_back(DB[i][j]);
 				nestCheckSubset(transaction,1,tmp,j);
-
 			}
 		}
 	printf("End caning database!\n");
@@ -228,7 +227,7 @@ void foreachDB(u_map_vector &candidates){
 
 
 void nestCheckSubset(vector<int> &transaction,int level,vector<int>&pre,int idx){
-	if (level < currentLevel){
+	if (level < currentLevel-1){
 
 		if (large_itemsets_k[level].find(pre) == large_itemsets_k[level].end()) return;
 			for (int j = idx+1;j<transaction.size()-currentLevel+level+1;j++){
@@ -238,9 +237,20 @@ void nestCheckSubset(vector<int> &transaction,int level,vector<int>&pre,int idx)
 			}
 	}else{
 
-		if(candidates_k[currentLevel].find(pre)!=candidates_k[currentLevel].end()){
-
-			candidates_k[currentLevel][pre]++;
+//		if(candidates_k[currentLevel].find(pre)!=candidates_k[currentLevel].end()){
+//
+//			candidates_k[currentLevel][pre]++;
+//		}
+		for(int i = idx+1;i<transaction.size();i++){
+			vector<int> tmp = pre;
+			tmp.push_back(transaction.at(i));
+			//vector<int> mask;mask.push_back(tmp.at(tmp.size()-2));mask.push_back(tmp.at(tmp.size()-1));
+			//if (large_itemsets_k[2].find(mask) ==  large_itemsets_k[2].end() ) return;
+			if (candidates_k[currentLevel].find(tmp)!=candidates_k[currentLevel].end()){
+				candidates_k[currentLevel][tmp]++;
+			}else{
+				candidates_k[currentLevel][tmp]=1;
+			}
 		}
 	}
 }
