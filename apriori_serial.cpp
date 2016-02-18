@@ -30,11 +30,14 @@ template < typename INTVECTOR > struct int_vector
  */
 int num_transactions = 0;
 int currentLevel = 1;
-float min_support = 10/10000.0f;
+float min_support =10/10000.0f;
+float min_confidence = 0.8;
 vector<vector<int>> DB; 										//database
-typedef unordered_map<vector<int>,int,int_vector<vector<int>>> u_map_vector;
+typedef unordered_map<vector<int>,float,int_vector<vector<int>>> u_map_vector;
+typedef unordered_map<vector<int>,u_map_vector,int_vector<vector<int>>> u_map_vector_rules;
 unordered_map <int,u_map_vector> candidates_k;
 unordered_map <int,u_map_vector> large_itemsets_k;
+u_map_vector_rules strong_rules;
 clock_t lastTimeTick,mainstart;
 int debug_flag = 0;
 
@@ -44,12 +47,15 @@ int debug_flag = 0;
  */
 u_map_vector generateLargeItemsets(u_map_vector &candidates); 	//Generate large itemsets with given candidates
 u_map_vector generateCandidates(u_map_vector &largeItemsets);
+vector<int> vectorRemoveOtherVector(vector<int> base, vector<int> sub);
 bool inputdata(const  char* filename); 							//Read data from file and initialize C1 candidates
 void foreachDB(u_map_vector &candidates);
 void nestCheckSubset(vector<int> &transaction,int level,vector<int>&pre,int idx);
 void output(u_map_vector &map);
 void output(vector<int> &trans);
+void output(u_map_vector_rules &rules);
 void timetick(clock_t since);
+
 /**
  * Main application
  */
@@ -69,8 +75,8 @@ int main(int argc, char const *argv[]){
 		candidates_k[currentLevel] = candidates;
 		if (debug_flag)printf("Number of candidates:%d\n",(int)candidates.size());
 		foreachDB(candidates_k[currentLevel]);
-		//output(candidates_k[currentLevel]);
 		u_map_vector largeItemsets = generateLargeItemsets(candidates_k[currentLevel]);
+		//output(largeItemsets);
 		if (debug_flag)printf("Number of largeItemsets:%d\n",(int)largeItemsets.size());
 		if (largeItemsets.size() == 0) {
 			if (debug_flag)printf("No any more large item-sets! at level %d\n",currentLevel);
@@ -81,9 +87,53 @@ int main(int argc, char const *argv[]){
 
 	printf("End finding frequent itemsets ");
 	timetick(mainstart);
+	int largestLength = currentLevel-1;
+	int numofStrongRules = 0;
+	for(int length = 2;length <= largestLength;length++){
+		/*Foe each frequent Itemset at currentLevel*/
+		u_map_vector::iterator largeItemsets_end = large_itemsets_k[length].end();
+		for(u_map_vector::iterator itemset = large_itemsets_k[length].begin();itemset!=largeItemsets_end;++itemset){
+			vector<int> frequentSet = itemset->first;
+			u_map_vector ruleHeaders;
+			for(int i = 0 ; i < frequentSet.size();i++){
+				vector<int> tmp;
+				tmp.push_back(frequentSet[i]);
+				ruleHeaders[tmp] = 0;
+			}
+			int m = 1;
+			while (!ruleHeaders.empty() && m < frequentSet.size() ){
+				u_map_vector::iterator ruleHeader_end = ruleHeaders.end();
+				/*traverse the possible header*/
+				for(u_map_vector::iterator ruleHeader = ruleHeaders.begin();ruleHeader!=ruleHeader_end;++ruleHeader){
+					/*check the confidence of the rule*/
+					vector<int> leftItems = vectorRemoveOtherVector( frequentSet,ruleHeader->first);
+					float confidence = (float)large_itemsets_k[length][frequentSet]/(float)large_itemsets_k[m][ruleHeader->first];
+					//output(large_itemsets_k[length]);
+					//printf("%f,%f,%f\n",(double)large_itemsets_k[length][frequentSet],(double)large_itemsets_k[m][ruleHeader->first],confidence);
 
+					if (confidence >= min_confidence){
+						numofStrongRules++;
+						if(strong_rules.find(ruleHeader->first) == strong_rules.end()){
+							u_map_vector ruleBodies;
+							ruleBodies[leftItems] = confidence;
+							strong_rules[ruleHeader->first] = ruleBodies;
+						}else{
+							strong_rules[ruleHeader->first][leftItems] = confidence;
+						}
+					}
+				}
+				m++;
+				currentLevel = m;
+				ruleHeaders = generateCandidates(ruleHeaders);
+			}
+		}
+	}
+	printf("Num of strongrules:%d\n",numofStrongRules);
+	//output(strong_rules);
 	return 0;
 }
+
+
 
 bool inputdata(const char* filename){
 	if (debug_flag) printf("Input data...");
@@ -144,7 +194,7 @@ u_map_vector generateLargeItemsets(u_map_vector &candidates){
 u_map_vector generateCandidates(u_map_vector &largeItemsets){
 	if (debug_flag)printf("Start generating (k=%d) candidates...\n",currentLevel);
 	u_map_vector candidates;
-	u_map_vector::iterator largeItemsets_end;
+	u_map_vector::iterator largeItemsets_end = largeItemsets.end();
 	for(u_map_vector::iterator itemsetA = largeItemsets.begin();itemsetA!=largeItemsets_end;++itemsetA){
 		for(u_map_vector::iterator itemsetB = itemsetA;itemsetB!=largeItemsets_end;++itemsetB){
 			if (itemsetA!=itemsetB){
@@ -246,12 +296,30 @@ void nestCheckSubset(vector<int> &transaction,int level,vector<int>&pre,int idx)
 	}else{
 
 		if(candidates_k[currentLevel].find(pre)!=candidates_k[currentLevel].end()){
-
 			candidates_k[currentLevel][pre]++;
 		}
 	}
 }
 
+vector<int> vectorRemoveOtherVector(vector<int> base, vector<int> sub){
+	vector<int> newVector;
+	int idx = 0;
+	for (int i = 0 ; i < sub.size(); i++){
+		for(;idx<base.size();idx++){
+			if (sub[i] != base[idx]){
+				newVector.push_back(base[idx]);
+			}else{
+				idx++;
+				break;
+			}
+		}
+	}
+	for(;idx<base.size();idx++){
+		newVector.push_back(base[idx]);
+	}
+	//output(base);printf("=");output(sub);printf("=");output(newVector);printf("\n");
+	return newVector;
+}
 /**
  * Util functions for testing
  */
@@ -268,12 +336,23 @@ void output(u_map_vector &map){
 		for(int i = 0; i < (itemset->first).size();i++){
 			printf("%d ",itemset->first[i]);
 		}
-		printf(": sup=%d\n",itemset->second);
+		printf(": sup=%d\n",(int)itemset->second);
 		}
 }
 void output(vector<int> &trans){
 	for(int i = 0 ; i < trans.size();i++){
-		printf("%d",trans[i]);
+		printf("%d,",trans[i]);
 	}
-	printf("\n");
+	//printf("\n");
+}
+void output(u_map_vector_rules &rules){
+	u_map_vector_rules::iterator rules_end = rules.end();
+	for (u_map_vector_rules::iterator head=rules.begin();head!=rules_end;++head){
+		vector<int> headVector = head->first;
+		u_map_vector::iterator bodies_end = head->second.end();
+		for(u_map_vector::iterator body = head->second.begin();body!=bodies_end;++body){
+			vector<int> bodyVector = body->first;
+			output(headVector);printf("->");output(bodyVector);printf("(%f)\n",body->second);
+		}
+	}
 }
