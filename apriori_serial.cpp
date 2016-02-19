@@ -34,10 +34,10 @@ template < typename INTVECTOR > struct int_vector
 int num_transactions = 0;
 int currentLevel = 1;
 int largestLength = 0;
-float min_support =0;
-float min_confidence = 0.8;
+double min_support =0;
+double min_confidence = 0.8;
 vector<vector<int>> DB; 													//database
-typedef unordered_map<vector<int>,float,int_vector<vector<int>>> u_map_vector;					//vector as key float as value for storing the items sets and support
+typedef unordered_map<vector<int>,double,int_vector<vector<int>>> u_map_vector;					//vector as key double as value for storing the items sets and support
 typedef unordered_map<vector<int>,u_map_vector,int_vector<vector<int>>> u_map_vector_rules;		//vector as key u_map_vector as value for storing the strong rules head and body(with confidence)
 unordered_map <int,u_map_vector> candidates_k;								//store candidates at each level
 unordered_map <int,u_map_vector> large_itemsets_k;							//store large item sets at each level
@@ -99,7 +99,7 @@ int main(int argc, char const *argv[]){
 
 	/*Tick start*/
 	mainstart = lastTimeTick = clock();
-	if (inputdata(argv[1])) {if (debug_flag) printf("Input file success!\n");}
+	if (inputdata(argv[1])) {if (debug_flag) printf("Input file success!\n");}else{return 1;}
 	/*find frequent large items sets*/
 	findLargeItemsets();
 	/*find all strong rules*/
@@ -174,7 +174,7 @@ void findStrongRules(){
 				for(u_map_vector::iterator ruleHeader = ruleHeaders.begin();ruleHeader!=ruleHeader_end;++ruleHeader){
 					/*check the confidence of the rule*/
 					vector<int> leftItems = vectorRemoveOtherVector( frequentSet,ruleHeader->first);
-					float confidence = (float)large_itemsets_k[length][frequentSet]/(float)large_itemsets_k[m][ruleHeader->first];
+					double confidence = (double)large_itemsets_k[length][frequentSet]/(double)large_itemsets_k[m][ruleHeader->first];
 					/*save the strong rules*/
 					if (confidence >= min_confidence){
 						numofStrongRules++;
@@ -194,7 +194,7 @@ void findStrongRules(){
 			}
 		}
 	}
-	printf("Num of strongrules:%d\n",numofStrongRules);
+	printf("Num of associations rules:%d\n",numofStrongRules);
 	printf("End finding strong rules ");
 	timetick(lastTimeTick);
 }
@@ -236,6 +236,7 @@ bool inputdata(const char* filename){
 	/*clsoe file*/
 	inputFile.close();
 	num_transactions = DB.size();
+	printf("There are total %d transactions.\n",num_transactions);
 	candidates_k[1] = candidates;
 	large_itemsets_k[1] = generateLargeItemsets(candidates);
 	if (debug_flag) {
@@ -250,11 +251,10 @@ bool inputdata(const char* filename){
  */
 u_map_vector generateLargeItemsets(u_map_vector &candidates){
 	if (debug_flag)printf("Start generating (%d)largeItemsets...\n",currentLevel);
-	int tresh = min_support*num_transactions;
 	u_map_vector largeItemsets;
-	/*check the the support and tresh value*/
+	/*check the the support and min_tresh value*/
 	for(u_map_vector::iterator itemset = candidates.begin();itemset!=candidates.end();++itemset){
-		if(itemset->second > tresh ){
+		if(((double)(itemset->second/num_transactions)) >= min_support ){
 			largeItemsets[itemset->first] = itemset->second;
 		}
 	}
@@ -390,7 +390,7 @@ vector<int> vectorRemoveOtherVector(vector<int> base, vector<int> sub){
  */
 void timetick(clock_t since){
 	clock_t current = clock();
-	float elapsed_secs = float(current - since) / CLOCKS_PER_SEC;
+	double elapsed_secs = double(current - since) / CLOCKS_PER_SEC;
 	lastTimeTick = current;
 	printf("spent %f s\n\n",elapsed_secs);
 }
@@ -398,7 +398,7 @@ void timetick(clock_t since){
 void output(u_map_vector &map){
 	for(u_map_vector::iterator itemset = map.begin();itemset!=map.end();++itemset){
 		output(itemset->first);
-		printf("(%.2f)\n",(float)itemset->second/num_transactions);
+		printf("(%.2f)\n",(double)itemset->second/num_transactions);
 	}
 }
 
@@ -438,7 +438,7 @@ void output(u_map_vector_rules &rules){
  */
 void output(){
 	FILE * pFile;
-	pFile = fopen ("output.txt","w");
+	pFile = fopen ("output(in%).txt","w");
 	if (argv_code == 3){printf("Output all large frequent itemsets and strong rules to output.txt\n");}
 	if (argv_code == 2){printf("Output all strong rules to output.txt\n");}
 	if (argv_code == 1){printf("Output all large frequent itemsets to output.txt\n");}
@@ -449,14 +449,14 @@ void output(){
 			u_map_vector::iterator current_end = current.end();
 			for(u_map_vector::iterator itemset = current.begin();itemset!=current_end;++itemset){
 				output(pFile,itemset->first);
-				fprintf(pFile,"(%.2f)\n",(float)itemset->second/num_transactions*100);
+				fprintf(pFile,"(%.2f)\n",(double)itemset->second/num_transactions*100);
 			}
 		}
 	}else if  (argv_code == 2 || argv_code == 3){
 		u_map_vector_rules::iterator rules_end = strong_rules.end();
 			for (u_map_vector_rules::iterator head=strong_rules.begin();head!=rules_end;++head){
 				vector<int> headVector = head->first;
-				float head_sup = large_itemsets_k[(int)headVector.size()][headVector]/num_transactions;
+				double head_sup = large_itemsets_k[(int)headVector.size()][headVector]/num_transactions;
 				u_map_vector::iterator bodies_end = head->second.end();
 				for(u_map_vector::iterator body = head->second.begin();body!=bodies_end;++body){
 					vector<int> bodyVector = body->first;
